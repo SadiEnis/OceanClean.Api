@@ -1,0 +1,13 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+
+.vs/
+.idea/
+*.user
+*.suo
+*.rsuser
+
+appsettings.Development.json
