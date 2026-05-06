@@ -9,10 +9,15 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<MySqlConnectionFactory>();
+
 builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<AuthService>();
+
 builder.Services.AddScoped<PlayerProfileRepository>();
 builder.Services.AddScoped<PlayerProfileService>();
+
+builder.Services.AddScoped<MatchRepository>();
+builder.Services.AddScoped<MatchService>();
 
 var app = builder.Build();
 
