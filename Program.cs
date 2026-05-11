@@ -19,6 +19,9 @@ builder.Services.AddScoped<PlayerProfileService>();
 builder.Services.AddScoped<MatchRepository>();
 builder.Services.AddScoped<MatchService>();
 
+builder.Services.AddScoped<ShopRepository>();
+builder.Services.AddScoped<ShopService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
