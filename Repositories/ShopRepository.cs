@@ -74,24 +74,22 @@ public class ShopRepository
 
             if (item == null)
             {
-                return new PurchaseItemResponse
-                {
-                    Success = false,
-                    Message = "Shop item not found.",
-                    UserId = request.UserId,
-                    ShopItemId = request.ShopItemId
-                };
+                return await RollbackWithResponseAsync(
+                    transaction,
+                    "Shop item not found.",
+                    request.UserId,
+                    request.ShopItemId
+                );
             }
 
             if (!item.IsActive)
             {
-                return new PurchaseItemResponse
-                {
-                    Success = false,
-                    Message = "Shop item is not active.",
-                    UserId = request.UserId,
-                    ShopItemId = request.ShopItemId
-                };
+                return await RollbackWithResponseAsync(
+                    transaction,
+                    "Shop item is not active.",
+                    request.UserId,
+                    request.ShopItemId
+                );
             }
 
             var currentQuantity = await GetCurrentInventoryQuantityAsync(
@@ -103,14 +101,12 @@ public class ShopRepository
 
             if (currentQuantity + request.Quantity > item.MaxQuantity)
             {
-                return new PurchaseItemResponse
-                {
-                    Success = false,
-                    Message =
-                        $"Max quantity limit exceeded. MaxQuantity={item.MaxQuantity}, CurrentQuantity={currentQuantity}.",
-                    UserId = request.UserId,
-                    ShopItemId = request.ShopItemId
-                };
+                return await RollbackWithResponseAsync(
+                    transaction,
+                    $"Max quantity limit exceeded. MaxQuantity={item.MaxQuantity}, CurrentQuantity={currentQuantity}.",
+                    request.UserId,
+                    request.ShopItemId
+                );
             }
 
             var balanceBefore = await GetSoftCurrencyAsync(connection, transaction, request.UserId);
@@ -119,13 +115,12 @@ public class ShopRepository
 
             if (balanceBefore < totalPrice)
             {
-                return new PurchaseItemResponse
-                {
-                    Success = false,
-                    Message = "Insufficient soft currency.",
-                    UserId = request.UserId,
-                    ShopItemId = request.ShopItemId
-                };
+                return await RollbackWithResponseAsync(
+                    transaction,
+                    "Insufficient soft currency.",
+                    request.UserId,
+                    request.ShopItemId
+                );
             }
 
             var balanceAfter = balanceBefore - totalPrice;
@@ -165,6 +160,23 @@ public class ShopRepository
     }
     
     // Class Helpers
+    private static async Task<PurchaseItemResponse> RollbackWithResponseAsync(
+        MySqlTransaction transaction,
+        string message,
+        ulong userId,
+        ulong shopItemId)
+    {
+        await transaction.RollbackAsync();
+
+        return new PurchaseItemResponse
+        {
+            Success = false,
+            Message = message,
+            UserId = userId,
+            ShopItemId = shopItemId
+        };
+    }
+    
     private static async Task<PurchaseShopItemRecord?> GetShopItemForPurchaseAsync(
         MySqlConnection connection,
         MySqlTransaction transaction,
