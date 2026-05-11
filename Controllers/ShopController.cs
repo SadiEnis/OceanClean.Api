@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using OceanClean.Api.Models.Shop;
+using OceanClean.Api.DTOs.Shop;
 using OceanClean.Api.Services;
 
 namespace OceanClean.Api.Controllers;
@@ -18,6 +18,17 @@ public class ShopController : ControllerBase
     public async Task<IActionResult> GetItems()
     {
         var response = await _shopService.GetActiveShopItemsAsync();
+        return Ok(response);
+    }
+    
+    [HttpPost("purchase")]
+    public async Task<IActionResult> Purchase(PurchaseItemRequest request)
+    {
+        var response = await _shopService.PurchaseItemAsync(request);
+
+        if (!response.Success)
+            return BadRequest(response);
+
         return Ok(response);
     }
 }

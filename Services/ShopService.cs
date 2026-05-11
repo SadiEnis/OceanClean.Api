@@ -33,4 +33,39 @@ public class ShopService
             }).ToList()
         };
     }
+    
+    public async Task<PurchaseItemResponse> PurchaseItemAsync(PurchaseItemRequest request)
+    {
+        var validationError = ValidatePurchaseRequest(request);
+
+        if (validationError != null)
+        {
+            return new PurchaseItemResponse
+            {
+                Success = false,
+                Message = validationError,
+                UserId = request.UserId,
+                ShopItemId = request.ShopItemId
+            };
+        }
+
+        return await _shopRepository.PurchaseItemAsync(request);
+    }
+
+    private static string? ValidatePurchaseRequest(PurchaseItemRequest request)
+    {
+        if (request.UserId == 0)
+            return "UserId must be greater than zero.";
+
+        if (request.ShopItemId == 0)
+            return "ShopItemId must be greater than zero.";
+
+        if (request.Quantity == 0)
+            return "Quantity must be greater than zero.";
+
+        if (request.Quantity > 3)
+            return "Quantity cannot be greater than 3 per purchase.";
+
+        return null;
+    }
 }
