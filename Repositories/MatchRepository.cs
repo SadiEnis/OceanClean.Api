@@ -258,7 +258,7 @@ public class MatchRepository
         MySqlTransaction transaction,
         UsedItemRequest usedItem)
     {
-        ulong shopItemId = await GetConsumableShopItemIdByCodeAsync(
+        ulong shopItemId = await GetUsableShopItemIdByCodeAsync(
             connection,
             transaction,
             usedItem.ItemCode
@@ -295,7 +295,7 @@ public class MatchRepository
             shopItemId
         );
     }
-    private static async Task<ulong> GetConsumableShopItemIdByCodeAsync(
+    private static async Task<ulong> GetUsableShopItemIdByCodeAsync(
         MySqlConnection connection,
         MySqlTransaction transaction,
         string itemCode)
@@ -321,7 +321,7 @@ public class MatchRepository
         ulong shopItemId = reader.GetUInt64("shop_item_id");
         string itemType = reader.GetString("item_type");
 
-        if (itemType != "consumable")
+        if (itemType != "consumable" && itemType != "passive")
             throw new InvalidOperationException($"Item is not consumable. item_code={itemCode}, item_type={itemType}.");
 
         return shopItemId;
