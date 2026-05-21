@@ -41,6 +41,13 @@ public class MatchRepository
                     balanceAfter
                 );
             }
+            if (request.UsedItems is { Count: > 0 })
+            {
+                foreach (var usedItem in request.UsedItems)
+                {
+                    await ConsumeUsedItemAsync(connection, transaction, usedItem);
+                }
+            }
 
             await transaction.CommitAsync();
 
@@ -244,5 +251,100 @@ public class MatchRepository
         }
 
         return Convert.ToUInt32(result);
+    }
+    
+    private static async Task ConsumeUsedItemAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        UsedItemRequest usedItem)
+    {
+        ulong shopItemId = await GetConsumableShopItemIdByCodeAsync(
+            connection,
+            transaction,
+            usedItem.ItemCode
+        );
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              UPDATE player_inventory
+                              SET quantity = quantity - @quantity
+                              WHERE user_id = @userId
+                                AND shop_item_id = @shopItemId
+                                AND quantity >= @quantity;
+                              """;
+
+        command.Parameters.AddWithValue("@quantity", usedItem.Quantity);
+        command.Parameters.AddWithValue("@userId", usedItem.UserId);
+        command.Parameters.AddWithValue("@shopItemId", shopItemId);
+
+        var affectedRows = await command.ExecuteNonQueryAsync();
+
+        if (affectedRows == 0)
+        {
+            throw new InvalidOperationException(
+                $"Insufficient inventory quantity for user_id={usedItem.UserId}, item_code={usedItem.ItemCode}, quantity={usedItem.Quantity}."
+            );
+        }
+
+        await DeleteZeroQuantityInventoryItemAsync(
+            connection,
+            transaction,
+            usedItem.UserId,
+            shopItemId
+        );
+    }
+    private static async Task<ulong> GetConsumableShopItemIdByCodeAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        string itemCode)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              SELECT shop_item_id, item_type
+                              FROM shop_items
+                              WHERE item_code = @itemCode
+                                AND is_active = TRUE
+                              LIMIT 1;
+                              """;
+
+        command.Parameters.AddWithValue("@itemCode", itemCode);
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        if (!await reader.ReadAsync())
+            throw new InvalidOperationException($"Shop item not found or inactive. item_code={itemCode}.");
+
+        ulong shopItemId = reader.GetUInt64("shop_item_id");
+        string itemType = reader.GetString("item_type");
+
+        if (itemType != "consumable")
+            throw new InvalidOperationException($"Item is not consumable. item_code={itemCode}, item_type={itemType}.");
+
+        return shopItemId;
+    }
+    private static async Task DeleteZeroQuantityInventoryItemAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong userId,
+        ulong shopItemId)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              DELETE FROM player_inventory
+                              WHERE user_id = @userId
+                                AND shop_item_id = @shopItemId
+                                AND quantity = 0;
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+        command.Parameters.AddWithValue("@shopItemId", shopItemId);
+
+        await command.ExecuteNonQueryAsync();
     }
 }
