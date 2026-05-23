@@ -321,9 +321,12 @@ public class MatchRepository
         ulong shopItemId = reader.GetUInt64("shop_item_id");
         string itemType = reader.GetString("item_type");
 
-        if (itemType != "consumable" && itemType != "passive")
-            throw new InvalidOperationException($"Item is not consumable. item_code={itemCode}, item_type={itemType}.");
-
+        if (itemType != "consumable" && itemType != "passive" && itemType != "equipment")
+        {
+            throw new InvalidOperationException(
+                $"Item cannot be used on match completion. item_code={itemCode}, item_type={itemType}."
+            );
+        }
         return shopItemId;
     }
     private static async Task DeleteZeroQuantityInventoryItemAsync(
