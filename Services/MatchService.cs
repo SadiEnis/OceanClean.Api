@@ -84,6 +84,21 @@ public class MatchService
                     return "Used item quantity must be greater than zero.";
             }
         }
+        
+        if (request.ActionLogs != null)
+        {
+            foreach (var actionLog in request.ActionLogs)
+            {
+                if (actionLog.UserId == 0)
+                    return "Action log userId must be greater than zero.";
+
+                if (string.IsNullOrWhiteSpace(actionLog.ActionType))
+                    return "Action log actionType is required.";
+
+                if (actionLog.CreatedAt == default)
+                    return "Action log createdAt is required.";
+            }
+        }
 
         return null;
     }
