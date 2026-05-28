@@ -45,7 +45,7 @@ public class MatchRepository
             {
                 foreach (var usedItem in request.UsedItems)
                 {
-                    await ConsumeUsedItemAsync(connection, transaction, usedItem);
+                    await ConsumeUsedItemAsync(connection, transaction, matchId, usedItem);
                 }
             }
 
@@ -256,6 +256,7 @@ public class MatchRepository
     private static async Task ConsumeUsedItemAsync(
         MySqlConnection connection,
         MySqlTransaction transaction,
+        ulong matchId,
         UsedItemRequest usedItem)
     {
         ulong shopItemId = await GetUsableShopItemIdByCodeAsync(
@@ -287,6 +288,15 @@ public class MatchRepository
                 $"Insufficient inventory quantity for user_id={usedItem.UserId}, item_code={usedItem.ItemCode}, quantity={usedItem.Quantity}."
             );
         }
+
+        await InsertUseItemActionLogAsync(
+            connection,
+            transaction,
+            matchId,
+            usedItem.UserId,
+            shopItemId,
+            usedItem.Quantity
+        );
 
         await DeleteZeroQuantityInventoryItemAsync(
             connection,
@@ -347,6 +357,46 @@ public class MatchRepository
 
         command.Parameters.AddWithValue("@userId", userId);
         command.Parameters.AddWithValue("@shopItemId", shopItemId);
+
+        await command.ExecuteNonQueryAsync();
+    }
+    
+    private static async Task InsertUseItemActionLogAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong matchId,
+        ulong userId,
+        ulong shopItemId,
+        uint quantity)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              INSERT INTO player_action_logs
+                              (
+                                  user_id,
+                                  match_id,
+                                  action_type,
+                                  shop_item_id,
+                                  value,
+                                  created_at
+                              )
+                              VALUES
+                              (
+                                  @userId,
+                                  @matchId,
+                                  'use_item',
+                                  @shopItemId,
+                                  @value,
+                                  UTC_TIMESTAMP()
+                              );
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+        command.Parameters.AddWithValue("@matchId", matchId);
+        command.Parameters.AddWithValue("@shopItemId", shopItemId);
+        command.Parameters.AddWithValue("@value", quantity);
 
         await command.ExecuteNonQueryAsync();
     }
