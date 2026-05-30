@@ -466,13 +466,15 @@ public class MatchRepository
         command.Parameters.AddWithValue("@matchId", matchId);
         command.Parameters.AddWithValue("@actionType", actionLog.ActionType);
 
-        command.Parameters.AddWithValue("@trashTypeId", actionLog.TrashTypeId.HasValue
-            ? actionLog.TrashTypeId.Value
-            : DBNull.Value);
+        command.Parameters.AddWithValue("@trashTypeId",
+            actionLog.TrashTypeId.HasValue && actionLog.TrashTypeId.Value > 0
+                ? actionLog.TrashTypeId.Value
+                : DBNull.Value);
 
-        command.Parameters.AddWithValue("@targetUserId", actionLog.TargetUserId.HasValue
-            ? actionLog.TargetUserId.Value
-            : DBNull.Value);
+        command.Parameters.AddWithValue("@targetUserId",
+            actionLog.TargetUserId.HasValue && actionLog.TargetUserId.Value > 0
+                ? actionLog.TargetUserId.Value
+                : DBNull.Value);
 
         command.Parameters.AddWithValue("@shopItemId", shopItemId.HasValue
             ? shopItemId.Value
