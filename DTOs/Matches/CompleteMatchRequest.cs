@@ -13,4 +13,7 @@ public class CompleteMatchRequest
     public uint TotalTrashRecycled { get; set; }
 
     public List<MatchPlayerResultRequest> Players { get; set; } = new();
+    public List<UsedItemRequest> UsedItems { get; set; } = new();
+    
+    public List<PlayerActionLogRequest> ActionLogs { get; set; } = new();
 }

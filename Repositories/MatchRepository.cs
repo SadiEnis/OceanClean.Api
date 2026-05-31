@@ -42,6 +42,22 @@ public class MatchRepository
                 );
             }
 
+            if (request.UsedItems is { Count: > 0 })
+            {
+                foreach (var usedItem in request.UsedItems)
+                {
+                    await ConsumeUsedItemAsync(connection, transaction, matchId, usedItem);
+                }
+            }
+
+            if (request.ActionLogs is { Count: > 0 })
+            {
+                foreach (var actionLog in request.ActionLogs)
+                {
+                    await InsertPlayerActionLogAsync(connection, transaction, matchId, actionLog);
+                }
+            }
+
             await transaction.CommitAsync();
 
             return matchId;
@@ -244,5 +260,265 @@ public class MatchRepository
         }
 
         return Convert.ToUInt32(result);
+    }
+
+    private static async Task ConsumeUsedItemAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong matchId,
+        UsedItemRequest usedItem)
+    {
+        ulong shopItemId = await GetUsableShopItemIdByCodeAsync(
+            connection,
+            transaction,
+            usedItem.ItemCode
+        );
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              UPDATE player_inventory
+                              SET quantity = quantity - @quantity
+                              WHERE user_id = @userId
+                                AND shop_item_id = @shopItemId
+                                AND quantity >= @quantity;
+                              """;
+
+        command.Parameters.AddWithValue("@quantity", usedItem.Quantity);
+        command.Parameters.AddWithValue("@userId", usedItem.UserId);
+        command.Parameters.AddWithValue("@shopItemId", shopItemId);
+
+        var affectedRows = await command.ExecuteNonQueryAsync();
+
+        if (affectedRows == 0)
+        {
+            throw new InvalidOperationException(
+                $"Insufficient inventory quantity for user_id={usedItem.UserId}, item_code={usedItem.ItemCode}, quantity={usedItem.Quantity}."
+            );
+        }
+
+        await InsertUseItemActionLogAsync(
+            connection,
+            transaction,
+            matchId,
+            usedItem.UserId,
+            shopItemId,
+            usedItem.Quantity
+        );
+
+        await DeleteZeroQuantityInventoryItemAsync(
+            connection,
+            transaction,
+            usedItem.UserId,
+            shopItemId
+        );
+    }
+
+    private static async Task<ulong> GetUsableShopItemIdByCodeAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        string itemCode)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              SELECT shop_item_id, item_type
+                              FROM shop_items
+                              WHERE item_code = @itemCode
+                                AND is_active = TRUE
+                              LIMIT 1;
+                              """;
+
+        command.Parameters.AddWithValue("@itemCode", itemCode);
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        if (!await reader.ReadAsync())
+            throw new InvalidOperationException($"Shop item not found or inactive. item_code={itemCode}.");
+
+        ulong shopItemId = reader.GetUInt64("shop_item_id");
+        string itemType = reader.GetString("item_type");
+
+        if (itemType != "consumable" && itemType != "passive" && itemType != "equipment")
+        {
+            throw new InvalidOperationException(
+                $"Item cannot be used on match completion. item_code={itemCode}, item_type={itemType}."
+            );
+        }
+
+        return shopItemId;
+    }
+
+    private static async Task DeleteZeroQuantityInventoryItemAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong userId,
+        ulong shopItemId)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              DELETE FROM player_inventory
+                              WHERE user_id = @userId
+                                AND shop_item_id = @shopItemId
+                                AND quantity = 0;
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+        command.Parameters.AddWithValue("@shopItemId", shopItemId);
+
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task InsertUseItemActionLogAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong matchId,
+        ulong userId,
+        ulong shopItemId,
+        uint quantity)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              INSERT INTO player_action_logs
+                              (
+                                  user_id,
+                                  match_id,
+                                  action_type,
+                                  shop_item_id,
+                                  value,
+                                  created_at
+                              )
+                              VALUES
+                              (
+                                  @userId,
+                                  @matchId,
+                                  'use_item',
+                                  @shopItemId,
+                                  @value,
+                                  UTC_TIMESTAMP()
+                              );
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+        command.Parameters.AddWithValue("@matchId", matchId);
+        command.Parameters.AddWithValue("@shopItemId", shopItemId);
+        command.Parameters.AddWithValue("@value", quantity);
+
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task InsertPlayerActionLogAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong matchId,
+        PlayerActionLogRequest actionLog)
+    {
+        ulong? shopItemId = null;
+
+        if (!string.IsNullOrWhiteSpace(actionLog.ItemCode))
+        {
+            shopItemId = await GetShopItemIdByCodeAsync(
+                connection,
+                transaction,
+                actionLog.ItemCode
+            );
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              INSERT INTO player_action_logs
+                              (
+                                  user_id,
+                                  match_id,
+                                  action_type,
+                                  trash_type_id,
+                                  target_user_id,
+                                  shop_item_id,
+                                  value,
+                                  pos_x,
+                                  pos_y,
+                                  created_at
+                              )
+                              VALUES
+                              (
+                                  @userId,
+                                  @matchId,
+                                  @actionType,
+                                  @trashTypeId,
+                                  @targetUserId,
+                                  @shopItemId,
+                                  @value,
+                                  @posX,
+                                  @posY,
+                                  @createdAt
+                              );
+                              """;
+
+        command.Parameters.AddWithValue("@userId", actionLog.UserId);
+        command.Parameters.AddWithValue("@matchId", matchId);
+        command.Parameters.AddWithValue("@actionType", actionLog.ActionType);
+
+        command.Parameters.AddWithValue("@trashTypeId",
+            actionLog.TrashTypeId.HasValue && actionLog.TrashTypeId.Value > 0
+                ? actionLog.TrashTypeId.Value
+                : DBNull.Value);
+
+        command.Parameters.AddWithValue("@targetUserId",
+            actionLog.TargetUserId.HasValue && actionLog.TargetUserId.Value > 0
+                ? actionLog.TargetUserId.Value
+                : DBNull.Value);
+
+        command.Parameters.AddWithValue("@shopItemId", shopItemId.HasValue
+            ? shopItemId.Value
+            : DBNull.Value);
+
+        command.Parameters.AddWithValue("@value", actionLog.Value.HasValue
+            ? actionLog.Value.Value
+            : DBNull.Value);
+
+        command.Parameters.AddWithValue("@posX", actionLog.PosX.HasValue
+            ? actionLog.PosX.Value
+            : DBNull.Value);
+
+        command.Parameters.AddWithValue("@posY", actionLog.PosY.HasValue
+            ? actionLog.PosY.Value
+            : DBNull.Value);
+
+        command.Parameters.AddWithValue("@createdAt", actionLog.CreatedAt);
+
+        await command.ExecuteNonQueryAsync();
+    }
+    
+    private static async Task<ulong> GetShopItemIdByCodeAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        string itemCode)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              SELECT shop_item_id
+                              FROM shop_items
+                              WHERE item_code = @itemCode
+                              LIMIT 1;
+                              """;
+
+        command.Parameters.AddWithValue("@itemCode", itemCode);
+
+        object? result = await command.ExecuteScalarAsync();
+
+        if (result == null || result == DBNull.Value)
+            throw new InvalidOperationException($"Shop item not found. item_code={itemCode}.");
+
+        return Convert.ToUInt64(result);
     }
 }

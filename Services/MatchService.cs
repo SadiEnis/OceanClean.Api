@@ -69,6 +69,36 @@ public class MatchService
             if (player.UserId == 0)
                 return "Player userId must be greater than zero.";
         }
+        
+        if (request.UsedItems != null)
+        {
+            foreach (var usedItem in request.UsedItems)
+            {
+                if (usedItem.UserId == 0)
+                    return "Used item userId must be greater than zero.";
+
+                if (string.IsNullOrWhiteSpace(usedItem.ItemCode))
+                    return "Used item code is required.";
+
+                if (usedItem.Quantity == 0)
+                    return "Used item quantity must be greater than zero.";
+            }
+        }
+        
+        if (request.ActionLogs != null)
+        {
+            foreach (var actionLog in request.ActionLogs)
+            {
+                if (actionLog.UserId == 0)
+                    return "Action log userId must be greater than zero.";
+
+                if (string.IsNullOrWhiteSpace(actionLog.ActionType))
+                    return "Action log actionType is required.";
+
+                if (actionLog.CreatedAt == default)
+                    return "Action log createdAt is required.";
+            }
+        }
 
         return null;
     }
