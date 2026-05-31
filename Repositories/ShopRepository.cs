@@ -139,6 +139,18 @@ public class ShopRepository
                 balanceAfter,
                 item.ItemCode
             );
+            
+            await InsertShopPurchaseLogAsync(
+                connection,
+                transaction,
+                request.UserId,
+                request.ShopItemId,
+                request.Quantity,
+                item.PriceSoftCurrency,
+                totalPrice,
+                balanceBefore,
+                balanceAfter
+            );
 
             await transaction.CommitAsync();
 
@@ -369,6 +381,54 @@ public class ShopRepository
         command.Parameters.AddWithValue("@balanceAfter", balanceAfter);
         command.Parameters.AddWithValue("@shopItemId", shopItemId);
         command.Parameters.AddWithValue("@description", $"Purchased item: {itemCode}");
+
+        await command.ExecuteNonQueryAsync();
+    }
+    
+    private static async Task InsertShopPurchaseLogAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong userId,
+        ulong shopItemId,
+        uint quantity,
+        uint unitPrice,
+        uint totalPrice,
+        uint currencyBefore,
+        uint currencyAfter)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              INSERT INTO shop_purchase_logs (
+                                  user_id,
+                                  shop_item_id,
+                                  quantity,
+                                  unit_price,
+                                  total_price,
+                                  currency_before,
+                                  currency_after,
+                                  purchased_at
+                              )
+                              VALUES (
+                                  @userId,
+                                  @shopItemId,
+                                  @quantity,
+                                  @unitPrice,
+                                  @totalPrice,
+                                  @currencyBefore,
+                                  @currencyAfter,
+                                  UTC_TIMESTAMP()
+                              );
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+        command.Parameters.AddWithValue("@shopItemId", shopItemId);
+        command.Parameters.AddWithValue("@quantity", quantity);
+        command.Parameters.AddWithValue("@unitPrice", unitPrice);
+        command.Parameters.AddWithValue("@totalPrice", totalPrice);
+        command.Parameters.AddWithValue("@currencyBefore", currencyBefore);
+        command.Parameters.AddWithValue("@currencyAfter", currencyAfter);
 
         await command.ExecuteNonQueryAsync();
     }
