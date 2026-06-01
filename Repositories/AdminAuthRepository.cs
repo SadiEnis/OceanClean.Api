@@ -163,4 +163,101 @@ public class AdminAuthRepository
 
         await command.ExecuteNonQueryAsync();
     }
+    
+    public async Task<AdminUserRecord?> GetAdminByIdAsync(ulong adminUserId)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+                              SELECT
+                                  admin_user_id,
+                                  username,
+                                  password_hash,
+                                  admin_role,
+                                  admin_status
+                              FROM admin_users
+                              WHERE admin_user_id = @adminUserId
+                              LIMIT 1;
+                              """;
+
+        command.Parameters.AddWithValue("@adminUserId", adminUserId);
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        if (!await reader.ReadAsync())
+            return null;
+
+        return new AdminUserRecord
+        {
+            AdminUserId = reader.GetUInt64("admin_user_id"),
+            Username = reader.GetString("username"),
+            PasswordHash = reader.GetString("password_hash"),
+            AdminRole = reader.GetString("admin_role"),
+            AdminStatus = reader.GetString("admin_status")
+        };
+    }
+    
+    public async Task<AdminRefreshTokenRecord?> GetRefreshTokenByHashAsync(string tokenHash)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+                              SELECT
+                                  refresh_token_id,
+                                  admin_user_id,
+                                  token_hash,
+                                  expires_at,
+                                  revoked_at
+                              FROM admin_refresh_tokens
+                              WHERE token_hash = @tokenHash
+                              LIMIT 1;
+                              """;
+
+        command.Parameters.AddWithValue("@tokenHash", tokenHash);
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        if (!await reader.ReadAsync())
+            return null;
+
+        return new AdminRefreshTokenRecord
+        {
+            RefreshTokenId = reader.GetUInt64("refresh_token_id"),
+            AdminUserId = reader.GetUInt64("admin_user_id"),
+            TokenHash = reader.GetString("token_hash"),
+            ExpiresAt = reader.GetDateTime("expires_at"),
+            RevokedAt = reader.IsDBNull(reader.GetOrdinal("revoked_at"))
+                ? null
+                : reader.GetDateTime("revoked_at")
+        };
+    }
+    
+    public async Task RevokeRefreshTokenAsync(
+        ulong refreshTokenId,
+        string? revokedByIp)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+                              UPDATE admin_refresh_tokens
+                              SET revoked_at = UTC_TIMESTAMP(),
+                                  revoked_by_ip = @revokedByIp
+                              WHERE refresh_token_id = @refreshTokenId
+                                AND revoked_at IS NULL;
+                              """;
+
+        command.Parameters.AddWithValue("@refreshTokenId", refreshTokenId);
+        command.Parameters.AddWithValue("@revokedByIp", revokedByIp ?? (object)DBNull.Value);
+
+        await command.ExecuteNonQueryAsync();
+    }
 }
