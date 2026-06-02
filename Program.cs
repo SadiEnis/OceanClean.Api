@@ -9,8 +9,6 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using OceanClean.Api.Security;
 
-Console.WriteLine(BCrypt.Net.BCrypt.HashPassword("Admin123!"));
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
@@ -118,6 +116,8 @@ builder.Services.AddScoped<InventoryService>();
 
 builder.Services.AddScoped<AdminAuthRepository>();
 builder.Services.AddScoped<AdminAuthService>();
+builder.Services.AddScoped<AdminPlayersRepository>();
+builder.Services.AddScoped<AdminPlayersService>();
 
 
 var app = builder.Build();
