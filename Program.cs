@@ -123,6 +123,8 @@ builder.Services.AddScoped<AdminMatchesRepository>();
 builder.Services.AddScoped<AdminMatchesService>();
 builder.Services.AddScoped<AdminEconomyRepository>();
 builder.Services.AddScoped<AdminEconomyService>();
+builder.Services.AddScoped<AdminEventsRepository>();
+builder.Services.AddScoped<AdminEventsService>();
 
 
 var app = builder.Build();
