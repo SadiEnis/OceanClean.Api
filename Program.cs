@@ -118,6 +118,8 @@ builder.Services.AddScoped<AdminAuthRepository>();
 builder.Services.AddScoped<AdminAuthService>();
 builder.Services.AddScoped<AdminPlayersRepository>();
 builder.Services.AddScoped<AdminPlayersService>();
+builder.Services.AddScoped<AdminMatchesRepository>();
+builder.Services.AddScoped<AdminMatchesService>();
 
 
 var app = builder.Build();
