@@ -24,4 +24,24 @@ public class AdminMatchesController : ControllerBase
         var response = await _adminMatchesService.GetMatchesAsync(query);
         return Ok(response);
     }
+    
+    [HttpGet("{matchId:long}")]
+    public async Task<ActionResult<AdminMatchDetailResponse>> GetMatchDetail(long matchId)
+    {
+        if (matchId <= 0)
+        {
+            return BadRequest(new AdminMatchDetailResponse
+            {
+                Success = false,
+                Message = "MatchId must be greater than zero."
+            });
+        }
+
+        var response = await _adminMatchesService.GetMatchDetailAsync((ulong)matchId);
+
+        if (!response.Success)
+            return NotFound(response);
+
+        return Ok(response);
+    }
 }

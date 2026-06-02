@@ -68,4 +68,39 @@ public class AdminMatchesService
             }
         }
     }
+    
+    public async Task<AdminMatchDetailResponse> GetMatchDetailAsync(ulong matchId)
+    {
+        if (matchId == 0)
+        {
+            return new AdminMatchDetailResponse
+            {
+                Success = false,
+                Message = "MatchId must be greater than zero."
+            };
+        }
+
+        var match = await _adminMatchesRepository.GetMatchDetailAsync(matchId);
+
+        if (match == null)
+        {
+            return new AdminMatchDetailResponse
+            {
+                Success = false,
+                Message = "Match not found."
+            };
+        }
+
+        match.Players = await _adminMatchesRepository.GetMatchPlayersAsync(matchId);
+        match.UsedItems = await _adminMatchesRepository.GetMatchUsedItemsAsync(matchId);
+        match.RescueEvents = await _adminMatchesRepository.GetMatchRescueEventsAsync(matchId);
+        match.FaintReviveEvents = await _adminMatchesRepository.GetMatchFaintReviveEventsAsync(matchId);
+
+        return new AdminMatchDetailResponse
+        {
+            Success = true,
+            Message = "Match detail retrieved successfully.",
+            Match = match
+        };
+    }
 }
