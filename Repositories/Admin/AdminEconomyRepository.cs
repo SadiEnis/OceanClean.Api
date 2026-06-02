@@ -281,6 +281,72 @@ public class AdminEconomyRepository
         return points;
     }
 
+    public async Task<List<AdminEconomyCurrencyFlowPointDto>> GetCurrencyFlowAsync(
+        DateTime? from,
+        DateTime? to,
+        string bucketType)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        string bucketExpression = BuildBucketExpression("ct.created_at", bucketType);
+
+        var where = new List<string>();
+
+        if (from.HasValue)
+        {
+            where.Add("ct.created_at >= @from");
+            command.Parameters.AddWithValue("@from", from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            where.Add("ct.created_at <= @to");
+            command.Parameters.AddWithValue("@to", to.Value);
+        }
+
+        string whereClause = where.Count == 0
+            ? string.Empty
+            : "WHERE " + string.Join(" AND ", where);
+
+        command.CommandText = $"""
+                               SELECT
+                                   {bucketExpression} AS bucket,
+
+                                   COALESCE(SUM(CASE WHEN ct.amount > 0 THEN ct.amount ELSE 0 END), 0) AS earned_amount,
+                                   COALESCE(SUM(CASE WHEN ct.amount < 0 THEN ABS(ct.amount) ELSE 0 END), 0) AS spent_amount,
+                                   COALESCE(SUM(ct.amount), 0) AS net_amount,
+
+                                   COALESCE(SUM(CASE WHEN ct.amount > 0 THEN 1 ELSE 0 END), 0) AS earn_transaction_count,
+                                   COALESCE(SUM(CASE WHEN ct.amount < 0 THEN 1 ELSE 0 END), 0) AS spend_transaction_count
+                               FROM currency_transactions ct
+                               {whereClause}
+                               GROUP BY bucket
+                               ORDER BY bucket ASC;
+                               """;
+
+        var points = new List<AdminEconomyCurrencyFlowPointDto>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            points.Add(new AdminEconomyCurrencyFlowPointDto
+            {
+                Bucket = reader.GetString("bucket"),
+                EarnedAmount = Convert.ToInt32(reader["earned_amount"]),
+                SpentAmount = Convert.ToInt32(reader["spent_amount"]),
+                NetAmount = Convert.ToInt32(reader["net_amount"]),
+                EarnTransactionCount = Convert.ToUInt32(reader["earn_transaction_count"]),
+                SpendTransactionCount = Convert.ToUInt32(reader["spend_transaction_count"])
+            });
+        }
+
+        return points;
+    }
+
     private static string BuildBucketExpression(string dateColumn, string bucketType)
     {
         return bucketType switch

@@ -100,6 +100,32 @@ public class AdminEconomyService
         };
     }
     
+    public async Task<AdminEconomyCurrencyFlowResponse> GetCurrencyFlowAsync(
+        AdminEconomyQueryRequest query)
+    {
+        NormalizeQuery(query);
+
+        var (from, to) = ResolveDateRange(query);
+        string bucketType = ResolveBucketType(query.Range);
+
+        var points = await _adminEconomyRepository.GetCurrencyFlowAsync(
+            from,
+            to,
+            bucketType
+        );
+
+        return new AdminEconomyCurrencyFlowResponse
+        {
+            Success = true,
+            Message = "Economy currency flow retrieved successfully.",
+            Range = query.Range,
+            BucketType = bucketType,
+            From = from,
+            To = to,
+            Points = points
+        };
+    }
+    
     private static string ResolveBucketType(string range)
     {
         return range switch

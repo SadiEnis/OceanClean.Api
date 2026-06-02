@@ -32,4 +32,12 @@ public class AdminEconomyController : ControllerBase
         var response = await _adminEconomyService.GetItemTimeseriesAsync(query);
         return Ok(response);
     }
+    
+    [HttpGet("currency-flow")]
+    public async Task<ActionResult<AdminEconomyCurrencyFlowResponse>> GetCurrencyFlow(
+        [FromQuery] AdminEconomyQueryRequest query)
+    {
+        var response = await _adminEconomyService.GetCurrencyFlowAsync(query);
+        return Ok(response);
+    }
 }
