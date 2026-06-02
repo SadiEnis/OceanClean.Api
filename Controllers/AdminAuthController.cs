@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using OceanClean.Api.DTOs.Admin.Auth;
 using OceanClean.Api.Security;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace OceanClean.Api.Controllers;
 
@@ -58,5 +60,26 @@ public class AdminAuthController : ControllerBase
             return BadRequest(response);
 
         return Ok(response);
+    }
+    
+    [Authorize(Policy = "AdminOnly")]
+    [HttpGet("me")]
+    public ActionResult<AdminUserDto> Me()
+    {
+        string? adminUserIdValue = User.FindFirstValue("admin_user_id");
+        string? username = User.Identity?.Name ?? User.FindFirstValue(ClaimTypes.Name);
+        string? role = User.FindFirstValue(ClaimTypes.Role) ?? User.FindFirstValue("admin_role");
+
+        if (!ulong.TryParse(adminUserIdValue, out ulong adminUserId))
+        {
+            return Unauthorized();
+        }
+
+        return Ok(new AdminUserDto
+        {
+            AdminUserId = adminUserId,
+            Username = username ?? string.Empty,
+            Role = role ?? string.Empty
+        });
     }
 }

@@ -3,13 +3,46 @@ using OceanClean.Api.Repositories;
 using OceanClean.Api.Services;
 using OceanClean.Api.Security;
 
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using OceanClean.Api.Security;
+
 Console.WriteLine(BCrypt.Net.BCrypt.HashPassword("Admin123!"));
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter JWT access token."
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 builder.Services.Configure<JwtSettings>(
     builder.Configuration.GetSection("Jwt")
@@ -17,6 +50,54 @@ builder.Services.Configure<JwtSettings>(
 
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<RefreshTokenService>();
+
+var jwtSettings = builder.Configuration
+    .GetSection("Jwt")
+    .Get<JwtSettings>();
+
+if (jwtSettings == null || string.IsNullOrWhiteSpace(jwtSettings.SecretKey))
+{
+    throw new InvalidOperationException("JWT settings are missing.");
+}
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtSettings.Issuer,
+
+            ValidateAudience = true,
+            ValidAudience = jwtSettings.Audience,
+
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings.SecretKey)
+            ),
+
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("super_admin", "admin", "moderator", "viewer"));
+
+    options.AddPolicy("ModeratorOrAbove", policy =>
+        policy.RequireRole("super_admin", "admin", "moderator"));
+
+    options.AddPolicy("AdminOrAbove", policy =>
+        policy.RequireRole("super_admin", "admin"));
+
+    options.AddPolicy("SuperAdminOnly", policy =>
+        policy.RequireRole("super_admin"));
+});
+
+
 
 builder.Services.AddSingleton<MySqlConnectionFactory>();
 
@@ -50,6 +131,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
