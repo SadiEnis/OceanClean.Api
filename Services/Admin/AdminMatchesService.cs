@@ -1,7 +1,7 @@
 using OceanClean.Api.DTOs.Admin.Matches;
-using OceanClean.Api.Repositories;
+using OceanClean.Api.Repositories.Admin;
 
-namespace OceanClean.Api.Services;
+namespace OceanClean.Api.Services.Admin;
 
 public class AdminMatchesService
 {

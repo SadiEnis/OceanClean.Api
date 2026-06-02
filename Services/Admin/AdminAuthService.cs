@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Options;
 using OceanClean.Api.DTOs.Admin.Auth;
-using OceanClean.Api.Repositories;
+using OceanClean.Api.Repositories.Admin;
+using OceanClean.Api.Security;
 
-namespace OceanClean.Api.Security;
+namespace OceanClean.Api.Services.Admin;
 
 public class AdminAuthService
 {

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OceanClean.Api.DTOs.Admin.Matches;
-using OceanClean.Api.Services;
+using OceanClean.Api.Services.Admin;
 
 namespace OceanClean.Api.Controllers.Admin;
 

@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using OceanClean.Api.DTOs.Admin.Auth;
-using OceanClean.Api.Security;
+using OceanClean.Api.Services.Admin;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 
-namespace OceanClean.Api.Controllers;
+namespace OceanClean.Api.Controllers.Admin;
 
 [ApiController]
 public class AdminAuthController : ControllerBase

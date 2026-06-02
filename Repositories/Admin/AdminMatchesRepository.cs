@@ -3,7 +3,7 @@ using OceanClean.Api.Data;
 using OceanClean.Api.DTOs.Admin.Matches;
 using OceanClean.Api.Models.Admin;
 
-namespace OceanClean.Api.Repositories;
+namespace OceanClean.Api.Repositories.Admin;
 
 public class AdminMatchesRepository
 {

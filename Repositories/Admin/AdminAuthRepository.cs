@@ -1,7 +1,7 @@
 using OceanClean.Api.Data;
 using OceanClean.Api.Models.Admin;
 
-namespace OceanClean.Api.Repositories;
+namespace OceanClean.Api.Repositories.Admin;
 
 public class AdminAuthRepository
 {

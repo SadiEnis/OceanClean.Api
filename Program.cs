@@ -7,7 +7,8 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using OceanClean.Api.Security;
+using OceanClean.Api.Services.Admin;
+using OceanClean.Api.Repositories.Admin;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -120,6 +121,8 @@ builder.Services.AddScoped<AdminPlayersRepository>();
 builder.Services.AddScoped<AdminPlayersService>();
 builder.Services.AddScoped<AdminMatchesRepository>();
 builder.Services.AddScoped<AdminMatchesService>();
+builder.Services.AddScoped<AdminEconomyRepository>();
+builder.Services.AddScoped<AdminEconomyService>();
 
 
 var app = builder.Build();
