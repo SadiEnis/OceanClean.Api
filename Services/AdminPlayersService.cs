@@ -62,4 +62,37 @@ public class AdminPlayersService
             ? "asc"
             : "desc";
     }
+    
+    public async Task<AdminPlayerDetailResponse> GetPlayerDetailAsync(ulong userId)
+    {
+        if (userId == 0)
+        {
+            return new AdminPlayerDetailResponse
+            {
+                Success = false,
+                Message = "UserId must be greater than zero."
+            };
+        }
+
+        var player = await _adminPlayersRepository.GetPlayerDetailAsync(userId);
+
+        if (player == null)
+        {
+            return new AdminPlayerDetailResponse
+            {
+                Success = false,
+                Message = "Player not found."
+            };
+        }
+
+        player.Inventory = await _adminPlayersRepository.GetPlayerInventoryAsync(userId);
+        player.RecentMatches = await _adminPlayersRepository.GetPlayerRecentMatchesAsync(userId);
+
+        return new AdminPlayerDetailResponse
+        {
+            Success = true,
+            Message = "Player detail retrieved successfully.",
+            Player = player
+        };
+    }
 }

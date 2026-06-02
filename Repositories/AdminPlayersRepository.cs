@@ -142,4 +142,162 @@ public class AdminPlayersRepository
 
         return $"ORDER BY {column} {direction}";
     }
+
+    public async Task<AdminPlayerDetailDto?> GetPlayerDetailAsync(ulong userId)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+                              SELECT
+                                  u.user_id,
+                                  u.username,
+                                  u.display_name,
+                                  u.player_status,
+                                  u.created_at,
+                                  u.last_login_at,
+                                  pp.soft_currency,
+                                  pp.total_score,
+                                  pp.total_matches_played,
+                                  pp.total_matches_won,
+                                  pp.total_trash_recycled,
+                                  pp.total_revives_done,
+                                  pp.total_times_fainted,
+                                  pp.total_playtime_seconds
+                              FROM users u
+                              JOIN player_profiles pp ON pp.user_id = u.user_id
+                              WHERE u.user_id = @userId
+                              LIMIT 1;
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        if (!await reader.ReadAsync())
+            return null;
+
+        return new AdminPlayerDetailDto
+        {
+            UserId = reader.GetUInt64("user_id"),
+            Username = reader.GetString("username"),
+            DisplayName = reader.GetString("display_name"),
+            PlayerStatus = reader.GetString("player_status"),
+            CreatedAt = reader.GetDateTime("created_at"),
+            LastLoginAt = reader.IsDBNull(reader.GetOrdinal("last_login_at"))
+                ? null
+                : reader.GetDateTime("last_login_at"),
+
+            SoftCurrency = reader.GetUInt32("soft_currency"),
+            TotalScore = reader.GetUInt32("total_score"),
+            TotalMatchesPlayed = reader.GetUInt32("total_matches_played"),
+            TotalMatchesWon = reader.GetUInt32("total_matches_won"),
+            TotalTrashRecycled = reader.GetUInt32("total_trash_recycled"),
+            TotalRevivesDone = reader.GetUInt32("total_revives_done"),
+            TotalTimesFainted = reader.GetUInt32("total_times_fainted"),
+            TotalPlaytimeSeconds = reader.GetUInt32("total_playtime_seconds")
+        };
+    }
+
+    public async Task<List<AdminPlayerInventoryItemDto>> GetPlayerInventoryAsync(ulong userId)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+                              SELECT
+                                  pi.inventory_id,
+                                  pi.shop_item_id,
+                                  pi.quantity,
+                                  pi.acquired_at,
+                                  si.item_code,
+                                  si.item_name,
+                                  si.item_type
+                              FROM player_inventory pi
+                              JOIN shop_items si ON si.shop_item_id = pi.shop_item_id
+                              WHERE pi.user_id = @userId
+                              ORDER BY si.item_type, si.item_name;
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+
+        var items = new List<AdminPlayerInventoryItemDto>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            items.Add(new AdminPlayerInventoryItemDto
+            {
+                InventoryId = reader.GetUInt64("inventory_id"),
+                ShopItemId = reader.GetUInt64("shop_item_id"),
+                Quantity = reader.GetUInt32("quantity"),
+                AcquiredAt = reader.GetDateTime("acquired_at"),
+                ItemCode = reader.GetString("item_code"),
+                ItemName = reader.GetString("item_name"),
+                ItemType = reader.GetString("item_type")
+            });
+        }
+
+        return items;
+    }
+
+    public async Task<List<AdminPlayerRecentMatchDto>> GetPlayerRecentMatchesAsync(
+        ulong userId,
+        int limit = 10)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+                              SELECT
+                                  m.match_id,
+                                  m.match_code,
+                                  m.started_at,
+                                  m.ended_at,
+                                  m.duration_seconds,
+                                  mp.final_score,
+                                  mp.trash_recycled_count,
+                                  mp.revives_done,
+                                  mp.times_fainted,
+                                  mp.earned_currency
+                              FROM match_players mp
+                              JOIN matches m ON m.match_id = mp.match_id
+                              WHERE mp.user_id = @userId
+                              ORDER BY m.started_at DESC
+                              LIMIT @limit;
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+        command.Parameters.AddWithValue("@limit", Math.Clamp(limit, 1, 50));
+
+        var matches = new List<AdminPlayerRecentMatchDto>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            matches.Add(new AdminPlayerRecentMatchDto
+            {
+                MatchId = reader.GetUInt64("match_id"),
+                MatchCode = reader.GetString("match_code"),
+                StartedAt = reader.GetDateTime("started_at"),
+                EndedAt = reader.GetDateTime("ended_at"),
+                DurationSeconds = reader.GetUInt32("duration_seconds"),
+                FinalScore = reader.GetUInt32("final_score"),
+                TrashRecycledCount = reader.GetUInt32("trash_recycled_count"),
+                RevivesDone = reader.GetUInt32("revives_done"),
+                TimesFainted = reader.GetUInt32("times_fainted"),
+                EarnedCurrency = reader.GetUInt32("earned_currency")
+            });
+        }
+
+        return matches;
+    }
 }

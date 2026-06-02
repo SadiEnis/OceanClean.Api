@@ -24,4 +24,24 @@ public class AdminPlayersController : ControllerBase
         var response = await _adminPlayersService.GetPlayersAsync(query);
         return Ok(response);
     }
+    
+    [HttpGet("{userId:long}")]
+    public async Task<ActionResult<AdminPlayerDetailResponse>> GetPlayerDetail(long userId)
+    {
+        if (userId <= 0)
+        {
+            return BadRequest(new AdminPlayerDetailResponse
+            {
+                Success = false,
+                Message = "UserId must be greater than zero."
+            });
+        }
+
+        var response = await _adminPlayersService.GetPlayerDetailAsync((ulong)userId);
+
+        if (!response.Success)
+            return NotFound(response);
+
+        return Ok(response);
+    }
 }
