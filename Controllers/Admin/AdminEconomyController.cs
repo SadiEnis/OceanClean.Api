@@ -24,4 +24,12 @@ public class AdminEconomyController : ControllerBase
         var response = await _adminEconomyService.GetItemSummaryAsync(query);
         return Ok(response);
     }
+    
+    [HttpGet("item-timeseries")]
+    public async Task<ActionResult<AdminEconomyItemTimeseriesResponse>> GetItemTimeseries(
+        [FromQuery] AdminEconomyQueryRequest query)
+    {
+        var response = await _adminEconomyService.GetItemTimeseriesAsync(query);
+        return Ok(response);
+    }
 }

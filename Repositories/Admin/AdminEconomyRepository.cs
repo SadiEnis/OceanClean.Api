@@ -174,4 +174,121 @@ public class AdminEconomyRepository
 
         return "WHERE " + string.Join(" AND ", where);
     }
+
+    public async Task<List<AdminEconomyItemTimeseriesPointDto>> GetItemTimeseriesAsync(
+        DateTime? from,
+        DateTime? to,
+        string bucketType)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        string purchaseBucketExpression = BuildBucketExpression("spl.purchased_at", bucketType);
+        string usageBucketExpression = BuildBucketExpression("pal.created_at", bucketType);
+
+        var purchaseWhere = new List<string>();
+        var usageWhere = new List<string>
+        {
+            "pal.action_type = 'use_item'",
+            "pal.shop_item_id IS NOT NULL"
+        };
+
+        if (from.HasValue)
+        {
+            purchaseWhere.Add("spl.purchased_at >= @purchaseFrom");
+            usageWhere.Add("pal.created_at >= @usageFrom");
+
+            command.Parameters.AddWithValue("@purchaseFrom", from.Value);
+            command.Parameters.AddWithValue("@usageFrom", from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            purchaseWhere.Add("spl.purchased_at <= @purchaseTo");
+            usageWhere.Add("pal.created_at <= @usageTo");
+
+            command.Parameters.AddWithValue("@purchaseTo", to.Value);
+            command.Parameters.AddWithValue("@usageTo", to.Value);
+        }
+
+        string purchaseWhereClause = purchaseWhere.Count == 0
+            ? string.Empty
+            : "WHERE " + string.Join(" AND ", purchaseWhere);
+
+        string usageWhereClause = "WHERE " + string.Join(" AND ", usageWhere);
+
+        command.CommandText = $"""
+                               SELECT
+                                   combined.bucket,
+                                   combined.shop_item_id,
+                                   si.item_code,
+                                   si.item_name,
+                                   si.item_type,
+                                   SUM(combined.purchased_quantity) AS purchased_quantity,
+                                   SUM(combined.used_quantity) AS used_quantity
+                               FROM
+                               (
+                                   SELECT
+                                       {purchaseBucketExpression} AS bucket,
+                                       spl.shop_item_id,
+                                       SUM(spl.quantity) AS purchased_quantity,
+                                       0 AS used_quantity
+                                   FROM shop_purchase_logs spl
+                                   {purchaseWhereClause}
+                                   GROUP BY bucket, spl.shop_item_id
+
+                                   UNION ALL
+
+                                   SELECT
+                                       {usageBucketExpression} AS bucket,
+                                       pal.shop_item_id,
+                                       0 AS purchased_quantity,
+                                       SUM(COALESCE(pal.value, 0)) AS used_quantity
+                                   FROM player_action_logs pal
+                                   {usageWhereClause}
+                                   GROUP BY bucket, pal.shop_item_id
+                               ) combined
+                               JOIN shop_items si ON si.shop_item_id = combined.shop_item_id
+                               GROUP BY
+                                   combined.bucket,
+                                   combined.shop_item_id,
+                                   si.item_code,
+                                   si.item_name,
+                                   si.item_type
+                               ORDER BY combined.bucket ASC, si.item_code ASC;
+                               """;
+
+        var points = new List<AdminEconomyItemTimeseriesPointDto>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            points.Add(new AdminEconomyItemTimeseriesPointDto
+            {
+                Bucket = reader.GetString("bucket"),
+                ShopItemId = reader.GetUInt64("shop_item_id"),
+                ItemCode = reader.GetString("item_code"),
+                ItemName = reader.GetString("item_name"),
+                ItemType = reader.GetString("item_type"),
+                PurchasedQuantity = Convert.ToUInt32(reader["purchased_quantity"]),
+                UsedQuantity = Convert.ToUInt32(reader["used_quantity"])
+            });
+        }
+
+        return points;
+    }
+
+    private static string BuildBucketExpression(string dateColumn, string bucketType)
+    {
+        return bucketType switch
+        {
+            "hour" => $"DATE_FORMAT({dateColumn}, '%Y-%m-%d %H:00')",
+            "day" => $"DATE_FORMAT({dateColumn}, '%Y-%m-%d')",
+            "month" => $"DATE_FORMAT({dateColumn}, '%Y-%m')",
+            _ => $"DATE_FORMAT({dateColumn}, '%Y-%m-%d')"
+        };
+    }
 }

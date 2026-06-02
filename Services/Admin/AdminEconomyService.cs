@@ -73,4 +73,44 @@ public class AdminEconomyService
             _ => (null, null)
         };
     }
+    
+    public async Task<AdminEconomyItemTimeseriesResponse> GetItemTimeseriesAsync(
+        AdminEconomyQueryRequest query)
+    {
+        NormalizeQuery(query);
+
+        var (from, to) = ResolveDateRange(query);
+        string bucketType = ResolveBucketType(query.Range);
+
+        var points = await _adminEconomyRepository.GetItemTimeseriesAsync(
+            from,
+            to,
+            bucketType
+        );
+
+        return new AdminEconomyItemTimeseriesResponse
+        {
+            Success = true,
+            Message = "Economy item timeseries retrieved successfully.",
+            Range = query.Range,
+            BucketType = bucketType,
+            From = from,
+            To = to,
+            Points = points
+        };
+    }
+    
+    private static string ResolveBucketType(string range)
+    {
+        return range switch
+        {
+            "daily" => "hour",
+            "weekly" => "day",
+            "monthly" => "day",
+            "sixMonths" => "month",
+            "all" => "month",
+            "custom" => "day",
+            _ => "day"
+        };
+    }
 }
