@@ -87,6 +87,8 @@ public class AdminPlayersService
 
         player.Inventory = await _adminPlayersRepository.GetPlayerInventoryAsync(userId);
         player.RecentMatches = await _adminPlayersRepository.GetPlayerRecentMatchesAsync(userId);
+        player.RecentPurchases = await _adminPlayersRepository.GetPlayerRecentPurchasesAsync(userId);
+        player.RecentActionLogs = await _adminPlayersRepository.GetPlayerRecentActionLogsAsync(userId);
 
         return new AdminPlayerDetailResponse
         {

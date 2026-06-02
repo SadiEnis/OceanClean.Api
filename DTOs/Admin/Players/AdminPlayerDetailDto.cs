@@ -22,4 +22,6 @@ public class AdminPlayerDetailDto
 
     public List<AdminPlayerInventoryItemDto> Inventory { get; set; } = new();
     public List<AdminPlayerRecentMatchDto> RecentMatches { get; set; } = new();
+    public List<AdminPlayerRecentPurchaseDto> RecentPurchases { get; set; } = new();
+    public List<AdminPlayerRecentActionLogDto> RecentActionLogs { get; set; } = new();
 }

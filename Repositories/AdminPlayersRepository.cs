@@ -384,7 +384,7 @@ public class AdminPlayersRepository
             throw;
         }
     }
-    
+
     private static async Task<string?> GetPlayerStatusForUpdateAsync(
         MySqlConnection connection,
         MySqlTransaction transaction,
@@ -486,5 +486,163 @@ public class AdminPlayersRepository
         command.Parameters.AddWithValue("@userAgent", userAgent ?? (object)DBNull.Value);
 
         await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task<List<AdminPlayerRecentPurchaseDto>> GetPlayerRecentPurchasesAsync(
+        ulong userId,
+        int limit = 10)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+                              SELECT
+                                  spl.purchase_log_id,
+                                  spl.shop_item_id,
+                                  spl.quantity,
+                                  spl.unit_price,
+                                  spl.total_price,
+                                  spl.currency_before,
+                                  spl.currency_after,
+                                  spl.purchased_at,
+                                  si.item_code,
+                                  si.item_name,
+                                  si.item_type
+                              FROM shop_purchase_logs spl
+                              JOIN shop_items si ON si.shop_item_id = spl.shop_item_id
+                              WHERE spl.user_id = @userId
+                              ORDER BY spl.purchased_at DESC
+                              LIMIT @limit;
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+        command.Parameters.AddWithValue("@limit", Math.Clamp(limit, 1, 50));
+
+        var purchases = new List<AdminPlayerRecentPurchaseDto>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            purchases.Add(new AdminPlayerRecentPurchaseDto
+            {
+                PurchaseLogId = reader.GetUInt64("purchase_log_id"),
+                ShopItemId = reader.GetUInt64("shop_item_id"),
+                Quantity = reader.GetUInt32("quantity"),
+                UnitPrice = reader.GetInt32("unit_price"),
+                TotalPrice = reader.GetInt32("total_price"),
+                CurrencyBefore = reader.GetInt32("currency_before"),
+                CurrencyAfter = reader.GetInt32("currency_after"),
+                PurchasedAt = reader.GetDateTime("purchased_at"),
+                ItemCode = reader.GetString("item_code"),
+                ItemName = reader.GetString("item_name"),
+                ItemType = reader.GetString("item_type")
+            });
+        }
+
+        return purchases;
+    }
+
+    public async Task<List<AdminPlayerRecentActionLogDto>> GetPlayerRecentActionLogsAsync(
+        ulong userId,
+        int limit = 20)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+                              SELECT
+                                  pal.log_id,
+                                  pal.match_id,
+                                  m.match_code,
+                                  pal.action_type,
+                                  pal.shop_item_id,
+                                  si.item_code,
+                                  si.item_name,
+                                  pal.target_user_id,
+                                  target.username AS target_username,
+                                  target.display_name AS target_display_name,
+                                  pal.trash_type_id,
+                                  tt.trash_type_code,
+                                  tt.trash_type_name,
+                                  pal.value,
+                                  pal.pos_x,
+                                  pal.pos_y,
+                                  pal.created_at
+                              FROM player_action_logs pal
+                              JOIN matches m ON m.match_id = pal.match_id
+                              LEFT JOIN shop_items si ON si.shop_item_id = pal.shop_item_id
+                              LEFT JOIN users target ON target.user_id = pal.target_user_id
+                              LEFT JOIN trash_types tt ON tt.trash_type_id = pal.trash_type_id
+                              WHERE pal.user_id = @userId
+                              ORDER BY pal.created_at DESC
+                              LIMIT @limit;
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+        command.Parameters.AddWithValue("@limit", Math.Clamp(limit, 1, 100));
+
+        var logs = new List<AdminPlayerRecentActionLogDto>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            logs.Add(new AdminPlayerRecentActionLogDto
+            {
+                LogId = reader.GetUInt64("log_id"),
+                MatchId = reader.GetUInt64("match_id"),
+                MatchCode = reader.GetString("match_code"),
+                ActionType = reader.GetString("action_type"),
+
+                ShopItemId = reader.IsDBNull(reader.GetOrdinal("shop_item_id"))
+                    ? null
+                    : reader.GetUInt64("shop_item_id"),
+                ItemCode = reader.IsDBNull(reader.GetOrdinal("item_code"))
+                    ? null
+                    : reader.GetString("item_code"),
+                ItemName = reader.IsDBNull(reader.GetOrdinal("item_name"))
+                    ? null
+                    : reader.GetString("item_name"),
+
+                TargetUserId = reader.IsDBNull(reader.GetOrdinal("target_user_id"))
+                    ? null
+                    : reader.GetUInt64("target_user_id"),
+                TargetUsername = reader.IsDBNull(reader.GetOrdinal("target_username"))
+                    ? null
+                    : reader.GetString("target_username"),
+                TargetDisplayName = reader.IsDBNull(reader.GetOrdinal("target_display_name"))
+                    ? null
+                    : reader.GetString("target_display_name"),
+
+                TrashTypeId = reader.IsDBNull(reader.GetOrdinal("trash_type_id"))
+                    ? null
+                    : reader.GetUInt64("trash_type_id"),
+                TrashTypeCode = reader.IsDBNull(reader.GetOrdinal("trash_type_code"))
+                    ? null
+                    : reader.GetString("trash_type_code"),
+                TrashTypeName = reader.IsDBNull(reader.GetOrdinal("trash_type_name"))
+                    ? null
+                    : reader.GetString("trash_type_name"),
+
+                Value = reader.IsDBNull(reader.GetOrdinal("value"))
+                    ? null
+                    : reader.GetInt32("value"),
+                PosX = reader.IsDBNull(reader.GetOrdinal("pos_x"))
+                    ? null
+                    : reader.GetFloat("pos_x"),
+                PosY = reader.IsDBNull(reader.GetOrdinal("pos_y"))
+                    ? null
+                    : reader.GetFloat("pos_y"),
+
+                CreatedAt = reader.GetDateTime("created_at")
+            });
+        }
+
+        return logs;
     }
 }
