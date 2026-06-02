@@ -300,4 +300,191 @@ public class AdminPlayersRepository
 
         return matches;
     }
+
+    public async Task<AdminUpdatePlayerStatusResponse> UpdatePlayerStatusAsync(
+        ulong userId,
+        string newStatus,
+        ulong adminUserId,
+        string? ipAddress,
+        string? userAgent)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            string? oldStatus = await GetPlayerStatusForUpdateAsync(
+                connection,
+                transaction,
+                userId
+            );
+
+            if (oldStatus == null)
+            {
+                await transaction.RollbackAsync();
+
+                return new AdminUpdatePlayerStatusResponse
+                {
+                    Success = false,
+                    Message = "Player not found.",
+                    UserId = userId
+                };
+            }
+
+            if (string.Equals(oldStatus, newStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync();
+
+                return new AdminUpdatePlayerStatusResponse
+                {
+                    Success = true,
+                    Message = "Player status is already set to the requested value.",
+                    UserId = userId,
+                    OldStatus = oldStatus,
+                    NewStatus = newStatus
+                };
+            }
+
+            await UpdatePlayerStatusInternalAsync(
+                connection,
+                transaction,
+                userId,
+                newStatus
+            );
+
+            await InsertAdminAuditLogInternalAsync(
+                connection,
+                transaction,
+                adminUserId,
+                actionType: "player_status_changed",
+                targetType: "user",
+                targetId: userId,
+                oldValue: oldStatus,
+                newValue: newStatus,
+                ipAddress: ipAddress,
+                userAgent: userAgent
+            );
+
+            await transaction.CommitAsync();
+
+            return new AdminUpdatePlayerStatusResponse
+            {
+                Success = true,
+                Message = "Player status updated successfully.",
+                UserId = userId,
+                OldStatus = oldStatus,
+                NewStatus = newStatus
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+    
+    private static async Task<string?> GetPlayerStatusForUpdateAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong userId)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              SELECT player_status
+                              FROM users
+                              WHERE user_id = @userId
+                              LIMIT 1
+                              FOR UPDATE;
+                              """;
+
+        command.Parameters.AddWithValue("@userId", userId);
+
+        object? result = await command.ExecuteScalarAsync();
+
+        return result == null || result == DBNull.Value
+            ? null
+            : Convert.ToString(result);
+    }
+
+    private static async Task UpdatePlayerStatusInternalAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong userId,
+        string newStatus)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              UPDATE users
+                              SET player_status = @newStatus
+                              WHERE user_id = @userId;
+                              """;
+
+        command.Parameters.AddWithValue("@newStatus", newStatus);
+        command.Parameters.AddWithValue("@userId", userId);
+
+        int affectedRows = await command.ExecuteNonQueryAsync();
+
+        if (affectedRows == 0)
+            throw new InvalidOperationException($"Player not found. user_id={userId}.");
+    }
+
+    private static async Task InsertAdminAuditLogInternalAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ulong adminUserId,
+        string actionType,
+        string targetType,
+        ulong? targetId,
+        string? oldValue,
+        string? newValue,
+        string? ipAddress,
+        string? userAgent)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText = """
+                              INSERT INTO admin_audit_logs
+                              (
+                                  admin_user_id,
+                                  action_type,
+                                  target_type,
+                                  target_id,
+                                  old_value,
+                                  new_value,
+                                  ip_address,
+                                  user_agent,
+                                  created_at
+                              )
+                              VALUES
+                              (
+                                  @adminUserId,
+                                  @actionType,
+                                  @targetType,
+                                  @targetId,
+                                  @oldValue,
+                                  @newValue,
+                                  @ipAddress,
+                                  @userAgent,
+                                  UTC_TIMESTAMP()
+                              );
+                              """;
+
+        command.Parameters.AddWithValue("@adminUserId", adminUserId);
+        command.Parameters.AddWithValue("@actionType", actionType);
+        command.Parameters.AddWithValue("@targetType", targetType);
+        command.Parameters.AddWithValue("@targetId", targetId.HasValue ? targetId.Value : DBNull.Value);
+        command.Parameters.AddWithValue("@oldValue", oldValue ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@newValue", newValue ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@ipAddress", ipAddress ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@userAgent", userAgent ?? (object)DBNull.Value);
+
+        await command.ExecuteNonQueryAsync();
+    }
 }

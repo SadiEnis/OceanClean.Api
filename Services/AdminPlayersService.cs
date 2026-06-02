@@ -95,4 +95,57 @@ public class AdminPlayersService
             Player = player
         };
     }
+    
+    public async Task<AdminUpdatePlayerStatusResponse> UpdatePlayerStatusAsync(
+        ulong userId,
+        AdminUpdatePlayerStatusRequest request,
+        ulong adminUserId,
+        string? ipAddress,
+        string? userAgent)
+    {
+        if (userId == 0)
+        {
+            return new AdminUpdatePlayerStatusResponse
+            {
+                Success = false,
+                Message = "UserId must be greater than zero.",
+                UserId = userId
+            };
+        }
+
+        if (adminUserId == 0)
+        {
+            return new AdminUpdatePlayerStatusResponse
+            {
+                Success = false,
+                Message = "Admin user id is missing.",
+                UserId = userId
+            };
+        }
+
+        string newStatus = request.NewStatus.Trim().ToLowerInvariant();
+
+        if (!IsValidPlayerStatus(newStatus))
+        {
+            return new AdminUpdatePlayerStatusResponse
+            {
+                Success = false,
+                Message = "Invalid player status. Allowed values: active, inactive, banned.",
+                UserId = userId
+            };
+        }
+
+        return await _adminPlayersRepository.UpdatePlayerStatusAsync(
+            userId,
+            newStatus,
+            adminUserId,
+            ipAddress,
+            userAgent
+        );
+    }
+
+    private static bool IsValidPlayerStatus(string status)
+    {
+        return status is "active" or "inactive" or "banned";
+    }
 }

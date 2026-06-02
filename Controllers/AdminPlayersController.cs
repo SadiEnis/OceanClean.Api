@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OceanClean.Api.DTOs.Admin.Players;
@@ -41,6 +42,50 @@ public class AdminPlayersController : ControllerBase
 
         if (!response.Success)
             return NotFound(response);
+
+        return Ok(response);
+    }
+    
+    [Authorize(Policy = "ModeratorOrAbove")]
+    [HttpPatch("{userId:long}/status")]
+    public async Task<ActionResult<AdminUpdatePlayerStatusResponse>> UpdatePlayerStatus(
+        long userId,
+        [FromBody] AdminUpdatePlayerStatusRequest request)
+    {
+        if (userId <= 0)
+        {
+            return BadRequest(new AdminUpdatePlayerStatusResponse
+            {
+                Success = false,
+                Message = "UserId must be greater than zero."
+            });
+        }
+
+        string? adminUserIdValue = User.FindFirstValue("admin_user_id");
+
+        if (!ulong.TryParse(adminUserIdValue, out ulong adminUserId))
+        {
+            return Unauthorized();
+        }
+
+        string? ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        string? userAgent = Request.Headers.UserAgent.ToString();
+
+        var response = await _adminPlayersService.UpdatePlayerStatusAsync(
+            (ulong)userId,
+            request,
+            adminUserId,
+            ipAddress,
+            userAgent
+        );
+
+        if (!response.Success)
+        {
+            if (response.Message == "Player not found.")
+                return NotFound(response);
+
+            return BadRequest(response);
+        }
 
         return Ok(response);
     }
