@@ -15,6 +15,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AdminFrontend", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:5173")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -126,6 +137,9 @@ builder.Services.AddScoped<AdminEconomyService>();
 builder.Services.AddScoped<AdminEventsRepository>();
 builder.Services.AddScoped<AdminEventsService>();
 
+builder.Services.AddScoped<AdminDashboardRepository>();
+builder.Services.AddScoped<AdminDashboardService>();
+
 
 var app = builder.Build();
 
@@ -137,6 +151,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("AdminFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();

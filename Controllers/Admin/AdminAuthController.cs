@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 namespace OceanClean.Api.Controllers.Admin;
 
 [ApiController]
+[Route("api/admin/auth")]
 public class AdminAuthController : ControllerBase
 {
     private readonly AdminAuthService _adminAuthService;
