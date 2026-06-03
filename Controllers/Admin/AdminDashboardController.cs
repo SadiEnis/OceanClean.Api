@@ -23,4 +23,12 @@ public class AdminDashboardController : ControllerBase
         var response = await _adminDashboardService.GetSummaryAsync();
         return Ok(response);
     }
+    
+    [HttpGet("activity")]
+    public async Task<ActionResult<AdminDashboardActivityResponse>> GetActivity(
+        [FromQuery] AdminDashboardActivityQueryRequest query)
+    {
+        var response = await _adminDashboardService.GetActivityAsync(query);
+        return Ok(response);
+    }
 }
