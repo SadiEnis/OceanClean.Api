@@ -62,7 +62,7 @@ public class AdminPlayersService
             ? "asc"
             : "desc";
     }
-    
+
     public async Task<AdminPlayerDetailResponse> GetPlayerDetailAsync(ulong userId)
     {
         if (userId == 0)
@@ -97,7 +97,7 @@ public class AdminPlayersService
             Player = player
         };
     }
-    
+
     public async Task<AdminUpdatePlayerStatusResponse> UpdatePlayerStatusAsync(
         ulong userId,
         AdminUpdatePlayerStatusRequest request,
@@ -145,6 +145,87 @@ public class AdminPlayersService
             userAgent
         );
     }
+
+    public async Task<AdminPlayerItemTimeseriesResponse> GetPlayerItemTimeseriesAsync(
+        ulong userId,
+        AdminPlayerItemTimeseriesQueryRequest query)
+    {
+        if (userId == 0)
+        {
+            return new AdminPlayerItemTimeseriesResponse
+            {
+                Success = false,
+                Message = "UserId must be greater than zero."
+            };
+        }
+
+        NormalizeItemTimeseriesQuery(query);
+
+        var (from, to) = ResolveDateRange(query);
+        string bucketType = ResolveBucketType(query.Range);
+
+        var points = await _adminPlayersRepository.GetPlayerItemTimeseriesAsync(
+            userId,
+            from,
+            to,
+            bucketType
+        );
+
+        return new AdminPlayerItemTimeseriesResponse
+        {
+            Success = true,
+            Message = "Player item timeseries retrieved successfully.",
+            Range = query.Range,
+            BucketType = bucketType,
+            From = from,
+            To = to,
+            Points = points
+        };
+    }
+
+    private static void NormalizeItemTimeseriesQuery(AdminPlayerItemTimeseriesQueryRequest query)
+    {
+        query.Range = string.IsNullOrWhiteSpace(query.Range)
+            ? "weekly"
+            : query.Range.Trim();
+
+        if (query.From.HasValue && query.To.HasValue && query.From.Value > query.To.Value)
+        {
+            (query.From, query.To) = (query.To, query.From);
+        }
+    }
+
+    private static (DateTime? From, DateTime? To) ResolveDateRange(
+        AdminPlayerItemTimeseriesQueryRequest query)
+    {
+        DateTime now = DateTime.UtcNow;
+
+        return query.Range switch
+        {
+            "daily" => (now.Date, now),
+            "weekly" => (now.Date.AddDays(-7), now),
+            "monthly" => (now.Date.AddMonths(-1), now),
+            "sixMonths" => (now.Date.AddMonths(-6), now),
+            "custom" => (query.From, query.To),
+            "all" => (null, null),
+            _ => (now.Date.AddDays(-7), now)
+        };
+    }
+
+    private static string ResolveBucketType(string range)
+    {
+        return range switch
+        {
+            "daily" => "hour",
+            "weekly" => "day",
+            "monthly" => "day",
+            "sixMonths" => "month",
+            "all" => "month",
+            "custom" => "day",
+            _ => "day"
+        };
+    }
+
 
     private static bool IsValidPlayerStatus(string status)
     {

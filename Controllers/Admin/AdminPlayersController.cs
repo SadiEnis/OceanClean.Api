@@ -89,4 +89,29 @@ public class AdminPlayersController : ControllerBase
 
         return Ok(response);
     }
+    
+    [HttpGet("{userId:long}/item-timeseries")]
+    public async Task<ActionResult<AdminPlayerItemTimeseriesResponse>> GetPlayerItemTimeseries(
+        long userId,
+        [FromQuery] AdminPlayerItemTimeseriesQueryRequest query)
+    {
+        if (userId <= 0)
+        {
+            return BadRequest(new AdminPlayerItemTimeseriesResponse
+            {
+                Success = false,
+                Message = "UserId must be greater than zero."
+            });
+        }
+
+        var response = await _adminPlayersService.GetPlayerItemTimeseriesAsync(
+            (ulong)userId,
+            query
+        );
+
+        if (!response.Success)
+            return BadRequest(response);
+
+        return Ok(response);
+    }
 }
