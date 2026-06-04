@@ -60,4 +60,71 @@ public class AdminEventsService
             (query.From, query.To) = (query.To, query.From);
         }
     }
+    
+    public async Task<AdminEventsAnalyticsResponse> GetAnalyticsAsync(
+        AdminEventsAnalyticsQueryRequest query)
+    {
+        NormalizeAnalyticsQuery(query);
+
+        var (from, to) = ResolveDateRange(query);
+        string bucketType = ResolveBucketType(query.Range);
+
+        var response = await _adminEventsRepository.GetAnalyticsAsync(
+            from,
+            to,
+            bucketType
+        );
+
+        response.Success = true;
+        response.Message = "Events analytics retrieved successfully.";
+        response.Range = query.Range;
+        response.BucketType = bucketType;
+        response.From = from;
+        response.To = to;
+
+        return response;
+    }
+
+    private static void NormalizeAnalyticsQuery(AdminEventsAnalyticsQueryRequest query)
+    {
+        query.Range = string.IsNullOrWhiteSpace(query.Range)
+            ? "weekly"
+            : query.Range.Trim();
+
+        if (query.From.HasValue && query.To.HasValue && query.From.Value > query.To.Value)
+        {
+            (query.From, query.To) = (query.To, query.From);
+        }
+    }
+
+    private static (DateTime? From, DateTime? To) ResolveDateRange(
+        AdminEventsAnalyticsQueryRequest query)
+    {
+        DateTime now = DateTime.UtcNow;
+
+        return query.Range switch
+        {
+            "daily" => (now.Date, now),
+            "weekly" => (now.Date.AddDays(-7), now),
+            "monthly" => (now.Date.AddMonths(-1), now),
+            "sixMonths" => (now.Date.AddMonths(-6), now),
+            "custom" => (query.From, query.To),
+            "all" => (null, null),
+            _ => (now.Date.AddDays(-7), now)
+        };
+    }
+
+    private static string ResolveBucketType(string range)
+    {
+        return range switch
+        {
+            "daily" => "hour",
+            "weekly" => "day",
+            "monthly" => "day",
+            "sixMonths" => "month",
+            "all" => "month",
+            "custom" => "day",
+            _ => "day"
+        };
+    }
 }

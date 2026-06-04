@@ -24,4 +24,12 @@ public class AdminEventsController : ControllerBase
         var response = await _adminEventsService.GetEventsAsync(query);
         return Ok(response);
     }
+    
+    [HttpGet("analytics")]
+    public async Task<ActionResult<AdminEventsAnalyticsResponse>> GetAnalytics(
+        [FromQuery] AdminEventsAnalyticsQueryRequest query)
+    {
+        var response = await _adminEventsService.GetAnalyticsAsync(query);
+        return Ok(response);
+    }
 }

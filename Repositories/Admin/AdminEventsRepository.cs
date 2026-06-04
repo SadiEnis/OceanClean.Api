@@ -202,6 +202,206 @@ public class AdminEventsRepository
             : "WHERE " + string.Join(" AND ", where);
     }
 
+    public async Task<AdminEventsAnalyticsResponse> GetAnalyticsAsync(
+        DateTime? from,
+        DateTime? to,
+        string bucketType)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        var response = new AdminEventsAnalyticsResponse();
+
+        response.ActionTypeCounts = await GetActionTypeCountsAsync(connection, from, to);
+        response.Timeline = await GetTimelineAsync(connection, from, to, bucketType);
+        response.TopActors = await GetTopActorsAsync(connection, from, to);
+
+        return response;
+    }
+
+    private static async Task<List<AdminEventActionTypeCountDto>> GetActionTypeCountsAsync(
+        MySqlConnector.MySqlConnection connection,
+        DateTime? from,
+        DateTime? to)
+    {
+        await using var command = connection.CreateCommand();
+
+        var whereClauses = BuildDateWhereClauses("pal.created_at", from, to);
+        AddDateParameters(command, from, to);
+
+        command.CommandText = $"""
+                               SELECT
+                                   pal.action_type,
+                                   COUNT(*) AS event_count
+                               FROM player_action_logs pal
+                               {BuildWhereClause(whereClauses)}
+                               GROUP BY pal.action_type
+                               ORDER BY event_count DESC;
+                               """;
+
+        var results = new List<AdminEventActionTypeCountDto>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            results.Add(new AdminEventActionTypeCountDto
+            {
+                ActionType = reader.GetString("action_type"),
+                EventCount = Convert.ToInt64(reader["event_count"])
+            });
+        }
+
+        return results;
+    }
+
+    private static async Task<List<AdminEventTimelinePointDto>> GetTimelineAsync(
+        MySqlConnector.MySqlConnection connection,
+        DateTime? from,
+        DateTime? to,
+        string bucketType)
+    {
+        await using var command = connection.CreateCommand();
+
+        string bucketExpression = BuildBucketExpression("pal.created_at", bucketType);
+        var whereClauses = BuildDateWhereClauses("pal.created_at", from, to);
+        AddDateParameters(command, from, to);
+
+        command.CommandText = $"""
+                               SELECT
+                                   {bucketExpression} AS bucket,
+
+                                   SUM(CASE WHEN pal.action_type = 'pickup_trash' THEN 1 ELSE 0 END) AS pickup_trash,
+                                   SUM(CASE WHEN pal.action_type = 'recycle_trash' THEN 1 ELSE 0 END) AS recycle_trash,
+                                   SUM(CASE WHEN pal.action_type = 'revive_player' THEN 1 ELSE 0 END) AS revive_player,
+                                   SUM(CASE WHEN pal.action_type = 'player_fainted' THEN 1 ELSE 0 END) AS player_fainted,
+                                   SUM(CASE WHEN pal.action_type = 'use_item' THEN 1 ELSE 0 END) AS use_item,
+                                   SUM(CASE WHEN pal.action_type = 'rescue_started' THEN 1 ELSE 0 END) AS rescue_started,
+                                   SUM(CASE WHEN pal.action_type = 'rescue_completed' THEN 1 ELSE 0 END) AS rescue_completed,
+
+                                   COUNT(*) AS total_events
+                               FROM player_action_logs pal
+                               {BuildWhereClause(whereClauses)}
+                               GROUP BY bucket
+                               ORDER BY bucket ASC;
+                               """;
+
+        var results = new List<AdminEventTimelinePointDto>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            results.Add(new AdminEventTimelinePointDto
+            {
+                Bucket = reader.GetString("bucket"),
+
+                PickupTrash = Convert.ToInt64(reader["pickup_trash"]),
+                RecycleTrash = Convert.ToInt64(reader["recycle_trash"]),
+                RevivePlayer = Convert.ToInt64(reader["revive_player"]),
+                PlayerFainted = Convert.ToInt64(reader["player_fainted"]),
+                UseItem = Convert.ToInt64(reader["use_item"]),
+                RescueStarted = Convert.ToInt64(reader["rescue_started"]),
+                RescueCompleted = Convert.ToInt64(reader["rescue_completed"]),
+
+                TotalEvents = Convert.ToInt64(reader["total_events"])
+            });
+        }
+
+        return results;
+    }
+
+    private static async Task<List<AdminEventTopActorDto>> GetTopActorsAsync(
+        MySqlConnector.MySqlConnection connection,
+        DateTime? from,
+        DateTime? to)
+    {
+        await using var command = connection.CreateCommand();
+
+        var whereClauses = BuildDateWhereClauses("pal.created_at", from, to);
+        AddDateParameters(command, from, to);
+
+        command.CommandText = $"""
+                               SELECT
+                                   u.user_id,
+                                   u.username,
+                                   u.display_name,
+                                   COUNT(*) AS event_count
+                               FROM player_action_logs pal
+                               INNER JOIN users u ON u.user_id = pal.user_id
+                               {BuildWhereClause(whereClauses)}
+                               GROUP BY
+                                   u.user_id,
+                                   u.username,
+                                   u.display_name
+                               ORDER BY event_count DESC
+                               LIMIT 10;
+                               """;
+
+        var results = new List<AdminEventTopActorDto>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            results.Add(new AdminEventTopActorDto
+            {
+                UserId = reader.GetUInt64("user_id"),
+                Username = reader.GetString("username"),
+                DisplayName = reader.GetString("display_name"),
+                EventCount = Convert.ToInt64(reader["event_count"])
+            });
+        }
+
+        return results;
+    }
+
+    private static string BuildBucketExpression(string dateColumn, string bucketType)
+    {
+        return bucketType switch
+        {
+            "hour" => $"DATE_FORMAT({dateColumn}, '%Y-%m-%d %H:00')",
+            "day" => $"DATE_FORMAT({dateColumn}, '%Y-%m-%d')",
+            "month" => $"DATE_FORMAT({dateColumn}, '%Y-%m')",
+            _ => $"DATE_FORMAT({dateColumn}, '%Y-%m-%d')"
+        };
+    }
+
+    private static List<string> BuildDateWhereClauses(
+        string dateColumn,
+        DateTime? from,
+        DateTime? to)
+    {
+        var whereClauses = new List<string>();
+
+        if (from.HasValue)
+            whereClauses.Add($"{dateColumn} >= @from");
+
+        if (to.HasValue)
+            whereClauses.Add($"{dateColumn} <= @to");
+
+        return whereClauses;
+    }
+
+    private static string BuildWhereClause(List<string> whereClauses)
+    {
+        return whereClauses.Count == 0
+            ? string.Empty
+            : "WHERE " + string.Join(" AND ", whereClauses);
+    }
+
+    private static void AddDateParameters(
+        MySqlConnector.MySqlCommand command,
+        DateTime? from,
+        DateTime? to)
+    {
+        if (from.HasValue)
+            command.Parameters.AddWithValue("@from", from.Value);
+
+        if (to.HasValue)
+            command.Parameters.AddWithValue("@to", to.Value);
+    }
+
     private static string BuildOrderBy(AdminEventsQueryRequest query)
     {
         string direction = string.Equals(query.SortDirection, "asc", StringComparison.OrdinalIgnoreCase)
