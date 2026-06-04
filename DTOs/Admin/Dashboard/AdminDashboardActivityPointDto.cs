@@ -5,6 +5,7 @@ public class AdminDashboardActivityPointDto
     public string Bucket { get; set; } = string.Empty;
 
     public long NewPlayers { get; set; }
+    public long TotalPlayers { get; set; }
     public long PlayerLogins { get; set; }
     public long MatchesPlayed { get; set; }
     public long ItemPurchases { get; set; }

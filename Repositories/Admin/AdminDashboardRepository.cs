@@ -138,7 +138,8 @@ public class AdminDashboardRepository
                                    combined.bucket,
 
                                    SUM(combined.new_players) AS new_players,
-                                   SUM(combined.player_logins) AS player_logins,
+                               0 AS total_players,
+                               SUM(combined.player_logins) AS player_logins,
                                    SUM(combined.matches_played) AS matches_played,
                                    SUM(combined.item_purchases) AS item_purchases,
                                    SUM(combined.gameplay_events) AS gameplay_events,
@@ -241,24 +242,66 @@ public class AdminDashboardRepository
 
         var points = new List<AdminDashboardActivityPointDto>();
 
-        await using var reader = await command.ExecuteReaderAsync();
-
-        while (await reader.ReadAsync())
         {
-            points.Add(new AdminDashboardActivityPointDto
+            await using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
             {
-                Bucket = reader.GetString("bucket"),
-                NewPlayers = Convert.ToInt64(reader["new_players"]),
-                PlayerLogins = Convert.ToInt64(reader["player_logins"]),
-                MatchesPlayed = Convert.ToInt64(reader["matches_played"]),
-                ItemPurchases = Convert.ToInt64(reader["item_purchases"]),
-                GameplayEvents = Convert.ToInt64(reader["gameplay_events"]),
-                CurrencyEarned = Convert.ToInt32(reader["currency_earned"]),
-                CurrencySpent = Convert.ToInt32(reader["currency_spent"])
-            });
+                points.Add(new AdminDashboardActivityPointDto
+                {
+                    Bucket = reader.GetString("bucket"),
+                    NewPlayers = Convert.ToInt64(reader["new_players"]),
+                    TotalPlayers = 0,
+                    PlayerLogins = Convert.ToInt64(reader["player_logins"]),
+                    MatchesPlayed = Convert.ToInt64(reader["matches_played"]),
+                    ItemPurchases = Convert.ToInt64(reader["item_purchases"]),
+                    GameplayEvents = Convert.ToInt64(reader["gameplay_events"]),
+                    CurrencyEarned = Convert.ToInt32(reader["currency_earned"]),
+                    CurrencySpent = Convert.ToInt32(reader["currency_spent"])
+                });
+            }
         }
 
+        await FillCumulativeTotalPlayersAsync(connection, points, bucketType);
+
         return points;
+    }
+
+    private static async Task FillCumulativeTotalPlayersAsync(
+        MySqlConnector.MySqlConnection connection,
+        List<AdminDashboardActivityPointDto> points,
+        string bucketType)
+    {
+        if (points.Count == 0)
+            return;
+
+        string bucketFormat = bucketType switch
+        {
+            "hour" => "%Y-%m-%d %H:00",
+            "day" => "%Y-%m-%d",
+            "month" => "%Y-%m",
+            _ => "%Y-%m-%d"
+        };
+
+        foreach (var point in points)
+        {
+            await using var command = connection.CreateCommand();
+
+            command.CommandText = """
+                                  SELECT COUNT(*)
+                                  FROM users
+                                  WHERE DATE_FORMAT(created_at, @bucketFormat) <= @bucket;
+                                  """;
+
+            command.Parameters.AddWithValue("@bucketFormat", bucketFormat);
+            command.Parameters.AddWithValue("@bucket", point.Bucket);
+
+            object? result = await command.ExecuteScalarAsync();
+
+            point.TotalPlayers = result == null || result == DBNull.Value
+                ? 0
+                : Convert.ToInt64(result);
+        }
     }
 
     private static string BuildBucketExpression(string dateColumn, string bucketType)
