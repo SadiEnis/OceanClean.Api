@@ -1,4 +1,5 @@
 using OceanClean.Api.Data;
+using OceanClean.Api.DTOs.Admin.Auth;
 using OceanClean.Api.Models.Admin;
 
 namespace OceanClean.Api.Repositories.Admin;
@@ -259,5 +260,49 @@ public class AdminAuthRepository
         command.Parameters.AddWithValue("@revokedByIp", revokedByIp ?? (object)DBNull.Value);
 
         await command.ExecuteNonQueryAsync();
+    }
+    
+    public async Task<AdminMeResponse?> GetAdminMeByIdAsync(ulong adminUserId)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+                              SELECT
+                                  admin_user_id,
+                                  username,
+                                  admin_role,
+                                  admin_status,
+                                  last_login,
+                                  created_at,
+                                  updated_at
+                              FROM admin_users
+                              WHERE admin_user_id = @adminUserId
+                              LIMIT 1;
+                              """;
+
+        command.Parameters.AddWithValue("@adminUserId", adminUserId);
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        if (!await reader.ReadAsync())
+            return null;
+
+        return new AdminMeResponse
+        {
+            AdminUserId = reader.GetUInt64("admin_user_id"),
+            Username = reader.GetString("username"),
+            Role = reader.GetString("admin_role"),
+            AdminStatus = reader.GetString("admin_status"),
+            LastLogin = reader.IsDBNull(reader.GetOrdinal("last_login"))
+                ? null
+                : reader.GetDateTime("last_login"),
+            CreatedAt = reader.GetDateTime("created_at"),
+            UpdatedAt = reader.IsDBNull(reader.GetOrdinal("updated_at"))
+                ? null
+                : reader.GetDateTime("updated_at")
+        };
     }
 }

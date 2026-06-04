@@ -65,22 +65,22 @@ public class AdminAuthController : ControllerBase
     
     [Authorize(Policy = "AdminOnly")]
     [HttpGet("me")]
-    public ActionResult<AdminUserDto> Me()
+    public async Task<ActionResult<AdminMeResponse>> Me()
     {
         string? adminUserIdValue = User.FindFirstValue("admin_user_id");
-        string? username = User.Identity?.Name ?? User.FindFirstValue(ClaimTypes.Name);
-        string? role = User.FindFirstValue(ClaimTypes.Role) ?? User.FindFirstValue("admin_role");
 
         if (!ulong.TryParse(adminUserIdValue, out ulong adminUserId))
         {
             return Unauthorized();
         }
 
-        return Ok(new AdminUserDto
+        var response = await _adminAuthService.GetMeAsync(adminUserId);
+
+        if (response == null)
         {
-            AdminUserId = adminUserId,
-            Username = username ?? string.Empty,
-            Role = role ?? string.Empty
-        });
+            return Unauthorized();
+        }
+
+        return Ok(response);
     }
 }

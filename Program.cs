@@ -140,6 +140,9 @@ builder.Services.AddScoped<AdminEventsService>();
 builder.Services.AddScoped<AdminDashboardRepository>();
 builder.Services.AddScoped<AdminDashboardService>();
 
+builder.Services.AddScoped<AdminAuditLogsRepository>();
+builder.Services.AddScoped<AdminAuditLogsService>();
+
 
 var app = builder.Build();
 

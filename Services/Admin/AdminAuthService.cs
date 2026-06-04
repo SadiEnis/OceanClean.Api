@@ -266,4 +266,9 @@ public class AdminAuthService
             Message = "Admin logout successful."
         };
     }
+    
+    public async Task<AdminMeResponse?> GetMeAsync(ulong adminUserId)
+    {
+        return await _adminAuthRepository.GetAdminMeByIdAsync(adminUserId);
+    }
 }
