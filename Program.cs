@@ -15,12 +15,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? Array.Empty<string>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AdminFrontend", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173")
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -146,8 +150,9 @@ builder.Services.AddScoped<AdminAuditLogsService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+var swaggerEnabled = builder.Configuration.GetValue<bool>("Swagger:Enabled");
+
+if (app.Environment.IsDevelopment() || swaggerEnabled)
 {
     app.UseSwagger();
     app.UseSwaggerUI();
