@@ -9,6 +9,7 @@ namespace OceanClean.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly AuthService _authService;
+
     public AuthController(AuthService authService)
     {
         _authService = authService;
@@ -18,19 +19,28 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Register(RegisterRequest request)
     {
         var response = await _authService.RegisterAsync(request);
-        
+
         if (!response.Success)
             return BadRequest(response);
-        
+
         return Ok(response);
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
-        var response = await _authService.LoginAsync(request);
+        string? ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        string? userAgent = Request.Headers.UserAgent.ToString();
+
+        var response = await _authService.LoginAsync(
+            request,
+            ipAddress,
+            userAgent
+        );
+
         if (!response.Success)
             return Unauthorized(response);
+
         return Ok(response);
     }
 }

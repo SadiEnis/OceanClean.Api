@@ -72,7 +72,10 @@ public class AuthService
         };
     }
 
-    public async Task<AuthResponse> LoginAsync(LoginRequest request)
+    public async Task<AuthResponse> LoginAsync(
+        LoginRequest request,
+        string? ipAddress,
+        string? userAgent)
     {
         var username = request.Username.Trim().ToLowerInvariant();
 
@@ -108,6 +111,12 @@ public class AuthService
         }
 
         await _userRepository.UpdateLastLoginAsync(user.UserId);
+
+        await _userRepository.InsertPlayerLoginLogAsync(
+            user.UserId,
+            ipAddress,
+            userAgent
+        );
 
         return new AuthResponse
         {
