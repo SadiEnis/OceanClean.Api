@@ -165,7 +165,7 @@ public class AdminDashboardRepository
                                SELECT
                                    {userLoginBucket} AS bucket,
                                    0 AS new_players,
-                                   COUNT(*) AS player_logins,
+                                   COUNT(DISTINCT pll.user_id) AS player_logins,
                                    0 AS matches_played,
                                    0 AS item_purchases,
                                    0 AS gameplay_events,
