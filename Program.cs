@@ -5,6 +5,7 @@ using OceanClean.Api.Security;
 
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using OceanClean.Api.Services.Admin;
@@ -111,8 +112,6 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("super_admin"));
 });
 
-
-
 builder.Services.AddSingleton<MySqlConnectionFactory>();
 
 builder.Services.AddScoped<UserRepository>();
@@ -147,8 +146,12 @@ builder.Services.AddScoped<AdminDashboardService>();
 builder.Services.AddScoped<AdminAuditLogsRepository>();
 builder.Services.AddScoped<AdminAuditLogsService>();
 
-
 var app = builder.Build();
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 var swaggerEnabled = builder.Configuration.GetValue<bool>("Swagger:Enabled");
 
@@ -160,11 +163,13 @@ if (app.Environment.IsDevelopment() || swaggerEnabled)
 
 app.UseHttpsRedirection();
 
+app.UseRouting();
+
 app.UseCors("AdminFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
+app.MapControllers().RequireCors("AdminFrontend");
 
 app.Run();
