@@ -18,7 +18,14 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
-        var response = await _authService.RegisterAsync(request);
+        string? ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        string? userAgent = Request.Headers.UserAgent.ToString();
+
+        var response = await _authService.RegisterAsync(
+            request,
+            ipAddress,
+            userAgent
+        );
 
         if (!response.Success)
             return BadRequest(response);

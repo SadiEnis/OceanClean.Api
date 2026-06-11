@@ -12,7 +12,10 @@ public class AuthService
         _userRepository = userRepository;
     }
 
-    public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
+    public async Task<AuthResponse> RegisterAsync(
+        RegisterRequest request,
+        string? ipAddress,
+        string? userAgent)
     {
         var username = request.Username.Trim().ToLowerInvariant();
         var displayName = request.DisplayName.Trim();
@@ -60,6 +63,14 @@ public class AuthService
             username,
             passwordHash,
             displayName
+        );
+
+        await _userRepository.UpdateLastLoginAsync(userId);
+
+        await _userRepository.InsertPlayerLoginLogAsync(
+            userId,
+            ipAddress,
+            userAgent
         );
 
         return new AuthResponse
