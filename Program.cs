@@ -129,6 +129,9 @@ builder.Services.AddScoped<ShopService>();
 builder.Services.AddScoped<InventoryRepository>();
 builder.Services.AddScoped<InventoryService>();
 
+builder.Services.AddScoped<LeaderboardRepository>();
+builder.Services.AddScoped<LeaderboardService>();
+
 builder.Services.AddScoped<AdminAuthRepository>();
 builder.Services.AddScoped<AdminAuthService>();
 builder.Services.AddScoped<AdminPlayersRepository>();
